@@ -7,6 +7,7 @@ test/dummy/tmp/
 test/dummy/.sass-cache
 
 *.sh
+*.gem
 sample_data.rb
 gre.rb
 gpm.rb
