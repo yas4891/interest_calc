@@ -1,3 +1,4 @@
+require 'logger'
 require 'ostruct'
 require 'active_support'
 require 'active_support/core_ext'
@@ -6,16 +7,74 @@ require 'date'
 
 
 module InterestCalc
-  class OpenLineCalculator
+  class LineOfCreditCalculator
 
     attr_accessor :interest_rate
+    attr_accessor :logger
 
     def initialize(interest_rate = 0.05)
       @interest_rate = interest_rate
+      @logger = Logger.new(STDOUT)
     end
 
-    # calculates the interest per month for an open line of credit
     def calculate(data)
+      return_values = []
+      nitem = nil
+      changes = data[:changes]
+      end_date = data[:end_date]
+
+      if changes.nil? || changes.count < 1
+        raise Exception.new "No changes to the line of credit provided. Please provide an array of changes data[:changes]"
+      end
+
+      changes.reverse!
+      citem = changes.pop
+      cdate = citem[:date]
+      camount = citem[:amount]
+
+      
+      interest = 0
+      nitem = changes.pop
+
+      logger.debug "#{self.class.name}##{__method__}:calculation starts: #{cdate.at_beginning_of_month}"
+
+      while(cdate <= cdate.at_end_of_month) do
+
+        # amount has changed
+        if(!nitem.nil? && nitem[:date] == cdate)
+          logger.debug "#{self.class.name}##{__method__}: amount changing. OLD:#{camount} -- change:#{nitem[:amount]} -- NEW:#{camount + nitem[:amount]}"
+          camount += nitem[:amount]
+          nitem = changes.pop # pops nil if changes.empty?
+        end
+
+        interest += camount * interest_rate / 365.0
+
+        if(cdate == cdate.at_end_of_month)
+          return_values << {
+            interest: interest,
+            year: cdate.year,
+            month: cdate.month
+          }
+
+          interest = 0
+          logger.debug "#{self.class.name}##{__method__}: stored:#{return_values.last}"
+
+          # if there are no further changes and this month is over, abort
+          break if nitem.nil? && (end_date.nil? || cdate >= end_date)
+        end
+
+        
+
+        cdate = cdate + 1.day
+      end
+      
+      return return_values
+
+    end
+
+
+    # calculates the interest per month for an open line of credit
+    def calculate_old(data)
 
       return_values = []
       nitem = nil
@@ -108,6 +167,8 @@ module InterestCalc
     def print(data)
       values = calculate data
 
+      total_interest = 0.0
+
       puts "--------------------------------------"
       puts "|    year-month  |     interest      |"
       puts "--------------------------------------"
@@ -115,7 +176,10 @@ module InterestCalc
         ym = "#{item[:year]}-#{item[:month]}".ljust(16)
         i = item[:interest].to_f.round(2).to_s.rjust(19)
         puts "|#{ym}|#{i}|"
+
+        total_interest += item[:interest].to_f
       end
+      puts "|#{"2022".ljust(16)}|#{total_interest.round(2).to_s.rjust(19)}|"
       puts "--------------------------------------"
       return values
     end
@@ -128,16 +192,16 @@ module InterestCalc
         raise "amount can't be nil"
       end
 
-      puts "#{self.class.name}##{__method__}: date:#{cdate} -- end_date:#{end_date}"
+      logger.debug "#{self.class.name}##{__method__}: date:#{cdate} -- end_date:#{end_date}"
       # calculate until end of month if no end_date given.
       # Add one day to include last day in calculations
       end_date = end_date || (cdate.at_end_of_month)
 
-      puts "#{self.class.name}##{__method__}: interest rate: #{@interest_rate}"
+      logger.debug "#{self.class.name}##{__method__}: interest rate: #{@interest_rate}"
 
       result = interest_days_counter_factor(cdate, end_date) * @interest_rate * camount
 
-      puts "#{self.class.name}##{__method__}: calculated interest: #{result}"
+      logger.debug "#{self.class.name}##{__method__}: calculated interest: #{result}"
       return result
     end
 
@@ -152,7 +216,7 @@ module InterestCalc
       # add 1 to count the first day as well
       days = ((end_date - date).to_i + 1)
       factor = days / 360.0
-      puts "#{self.class.name}##{__method__}: days #{days}-- factor:#{factor}"
+      logger.debug "#{self.class.name}##{__method__}: days #{days}-- factor:#{factor}"
       factor
     end
   end
