@@ -17,7 +17,7 @@ Gem::Specification.new do |s|
   s.homepage    = 'https://rubygems.org/gems/interest_calc'
   s.license     = 'MIT'
 
-  s.add_dependency('active_support', '>= 7.0.0')
+  s.add_dependency('activesupport', '~> 7.0.0')
   s.add_development_dependency('minitest', '~> 5.16')
 
   #s.add_dependency('interest_days', '~> 0.4.1')
